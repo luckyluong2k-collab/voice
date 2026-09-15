@@ -198,6 +198,13 @@ async def generate_speech(req: TTSRequest):
 
     has_srt = srt_output_path.exists() and srt_output_path.stat().st_size > 0
 
+    user_voice_name = "Giọng chuẩn AI"
+    if req.user_model_id and req.user_model_id != "none":
+        for m in voice_manager.list_models():
+            if m["id"] == req.user_model_id:
+                user_voice_name = m["name"]
+                break
+
     return {
         "status": "success",
         "file_name": final_output_path.name,
@@ -207,7 +214,7 @@ async def generate_speech(req: TTSRequest):
             "word_count": word_count,
             "char_count": char_count,
             "voice": req.voice,
-            "user_model": req.user_model_id or "Giọng gốc"
+            "user_model": user_voice_name
         }
     }
 
@@ -339,6 +346,36 @@ async def upload_model(file: UploadFile = File(...)):
         "message": f"Đã lưu thành công model: {file.filename}",
         "models": voice_manager.list_models()
     }
+
+class RenameVoiceRequest(BaseModel):
+    voice_id: str
+    new_name: str
+
+@app.post("/api/rename-voice")
+def rename_voice_api(req: RenameVoiceRequest):
+    if not req.voice_id or not req.new_name.strip():
+        raise HTTPException(status_code=400, detail="Vui lòng cung cấp đầy đủ ID và tên mới.")
+    voice_manager.rename_voice(req.voice_id, req.new_name.strip())
+    return {
+        "status": "success",
+        "message": f"Đã đổi tên giọng thành: {req.new_name.strip()}",
+        "models": voice_manager.list_models()
+    }
+
+class DeleteVoiceRequest(BaseModel):
+    voice_id: str
+
+@app.post("/api/delete-voice")
+def delete_voice_api(req: DeleteVoiceRequest):
+    if not req.voice_id:
+        raise HTTPException(status_code=400, detail="Vui lòng cung cấp ID giọng cần xóa.")
+    voice_manager.delete_voice(req.voice_id)
+    return {
+        "status": "success",
+        "message": "Đã xóa giọng thành công.",
+        "models": voice_manager.list_models()
+    }
+
 
 @app.get("/api/audio-extracted/{filename}")
 def get_extracted_audio(filename: str):
