@@ -162,6 +162,14 @@ async def generate_speech(req: TTSRequest):
     srt_output_path = OUTPUTS_DIR / f"{file_id}.srt"
 
     # 3. Tổng hợp giọng đọc & tạo phụ đề SRT
+    # 3. Tổng hợp giọng đọc & tạo phụ đề SRT
+    # Tự động chọn giọng nền phù hợp giới tính nếu dùng model cá nhân
+    carrier_voice = req.voice
+    if req.user_model_id and req.user_model_id != "none":
+        model_info = voice_manager.get_model_info(req.user_model_id)
+        if model_info and model_info.get("base_voice"):
+            carrier_voice = model_info["base_voice"]
+
     success_tts = False
     last_error = None
     sub_generator = SubtitleGenerator()
@@ -170,7 +178,7 @@ async def generate_speech(req: TTSRequest):
         try:
             communicate = edge_tts.Communicate(
                 text=clean_text, 
-                voice=req.voice, 
+                voice=carrier_voice, 
                 rate=req.rate, 
                 pitch="+0Hz",
                 boundary="SentenceBoundary"
@@ -196,23 +204,28 @@ async def generate_speech(req: TTSRequest):
         print(f"[Lỗi Edge-TTS cuối cùng] {last_error}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi tổng hợp giọng nói: {str(last_error)}")
 
-    # 4. Áp dụng model giọng cá nhân nếu có
+    # 4. Áp dụng chuyển đổi giọng cá nhân (Acoustic Timbre & Pitch Conversion)
     working_audio = base_output_path
+    applied_custom_model = False
     if req.user_model_id and req.user_model_id != "none":
         success = voice_manager.apply_voice_conversion(
             input_wav=str(base_output_path),
             output_wav=str(converted_output_path),
-            model_id=req.user_model_id
+            model_id=req.user_model_id,
+            pitch_shift=req.pitch_percent
         )
         if success and converted_output_path.exists():
             working_audio = converted_output_path
+            applied_custom_model = True
 
-    # 5. Nâng cấp giọng điệu, nhịp lấy hơi như người thật & tông cao thấp
+    # 5. Nâng cấp giọng điệu, nhịp lấy hơi như người thật & phong cách
     try:
+        # Nếu đã áp dụng model cá nhân, pitch đã được cân chỉnh tối ưu
+        proc_pitch = 0 if applied_custom_model else req.pitch_percent
         proc_ok = audio_processor.process_voice(
             input_audio=str(working_audio),
             output_audio=str(final_output_path),
-            pitch_percent=req.pitch_percent,
+            pitch_percent=proc_pitch,
             voice_style=req.voice_style,
             breath_mode=req.breath_mode
         )
@@ -425,6 +438,42 @@ def get_extracted_audio(filename: str):
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Không tìm thấy file âm thanh trích xuất.")
     return FileResponse(path=file_path, media_type="audio/wav", filename=filename)
+
+@app.get("/logo.png")
+def get_logo_png():
+    for path in [BASE_DIR / "logo.png", WEB_DIR / "logo.png"]:
+        if path.exists():
+            return FileResponse(path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Logo not found")
+
+@app.get("/logo.svg")
+def get_logo_svg():
+    for path in [BASE_DIR / "logo.svg", WEB_DIR / "logo.svg"]:
+        if path.exists():
+            return FileResponse(path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Logo SVG not found")
+
+@app.get("/favicon.ico")
+@app.get("/favicon.png")
+def get_favicon_png():
+    for path in [BASE_DIR / "favicon.png", WEB_DIR / "favicon.png"]:
+        if path.exists():
+            return FileResponse(path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
+@app.get("/favicon.svg")
+def get_favicon_svg():
+    for path in [BASE_DIR / "favicon.svg", WEB_DIR / "favicon.svg"]:
+        if path.exists():
+            return FileResponse(path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Favicon SVG not found")
+
+@app.get("/og-image.png")
+def get_og_image():
+    for path in [BASE_DIR / "og-image.png", WEB_DIR / "og-image.png"]:
+        if path.exists():
+            return FileResponse(path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="OG Image not found")
 
 @app.get("/")
 def serve_index():

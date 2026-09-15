@@ -5,6 +5,7 @@ __pycache__/
 # Output files & Uploads
 outputs/*.mp3
 outputs/*.wav
+outputs/*.srt
 uploads/temp_*
 models/extracted_voices/*.wav
 !models/extracted_voices/.gitkeep
