@@ -570,15 +570,31 @@ Ví dụ: Kính chào quý vị, [lấy hơi] hôm nay thời tiết rất đẹ
   </div>
 
   <script>
-    const API_BASE = window.location.origin.includes('github.io') ? 'http://127.0.0.1:7860' : '';
+    // GitHub Pages chỉ chứa giao diện; backend TTS chạy cục bộ khi dùng bản này.
+    // Có thể ghi đè endpoint bằng window.VOICE_API_BASE khi dùng tunnel/server khác.
+    const API_BASE = window.VOICE_API_BASE || (window.location.origin.includes('github.io') ? 'http://127.0.0.1:7860' : '');
+    const SAVED_VOICE_KEY = 'vietVoice.selectedCustomVoiceId';
 
     // Trạng thái giọng đang chọn hiện tại
     let currentVoiceState = {
-      type: 'custom', // 'base' hoặc 'custom'
-      id: 'clip_video_2026-09-15_14-06-37', // Mặc định chọn giọng video clip đã nạp
-      name: 'Giọng Video của tôi (1:32s)',
+      type: 'base', // 'base' hoặc 'custom'
+      id: 'vi-VN-NamMinhNeural',
+      name: 'Nam Minh (Giọng Nam - Trầm ấm, truyền cảm)',
       baseVoiceFallback: 'vi-VN-NamMinhNeural'
     };
+
+    // Không hard-code ID của file đã nạp ở máy khác. ID sẽ được kiểm tra
+    // lại với /api/models trước khi dùng để tránh rơi im lặng về giọng mẫu.
+    try {
+      const savedVoiceId = localStorage.getItem(SAVED_VOICE_KEY);
+      if (savedVoiceId) {
+        currentVoiceState.type = 'custom';
+        currentVoiceState.id = savedVoiceId;
+        currentVoiceState.name = 'Đang kiểm tra giọng đã lưu...';
+      }
+    } catch (_) {
+      // localStorage có thể bị chặn trong chế độ riêng tư; vẫn dùng giọng mẫu.
+    }
 
     let allCustomVoices = [];
 
@@ -709,16 +725,19 @@ Ví dụ: Kính chào quý vị, [lấy hơi] hôm nay thời tiết rất đẹ
         currentVoiceState.type = 'base';
         currentVoiceState.id = baseId;
         currentVoiceState.name = (baseId === 'vi-VN-NamMinhNeural' ? 'Nam Minh (Giọng Nam - Trầm ấm, truyền cảm)' : 'Hoài My (Giọng Nữ - Nhẹ nhàng, tự nhiên)');
+        try { localStorage.removeItem(SAVED_VOICE_KEY); } catch (_) {}
       } else {
         const found = allCustomVoices.find(v => v.id === voiceId);
         if (found) {
           currentVoiceState.type = 'custom';
           currentVoiceState.id = found.id;
           currentVoiceState.name = found.name;
+          try { localStorage.setItem(SAVED_VOICE_KEY, found.id); } catch (_) {}
         } else {
           currentVoiceState.type = 'custom';
           currentVoiceState.id = voiceId;
           currentVoiceState.name = voiceId;
+          try { localStorage.setItem(SAVED_VOICE_KEY, voiceId); } catch (_) {}
         }
       }
 
@@ -830,24 +849,34 @@ Ví dụ: Kính chào quý vị, [lấy hơi] hôm nay thời tiết rất đẹ
           });
         }
 
-        // Nếu giọng hiện tại vẫn nằm trong allCustomVoices, giữ nguyên. Nếu không, chọn giọng đầu tiên nếu có
-        if (currentVoiceState.type === 'custom') {
-          const exists = allCustomVoices.find(v => v.id === currentVoiceState.id);
-          if (exists) {
-            currentVoiceState.name = exists.name;
-          } else if (allCustomVoices.length > 0) {
-            currentVoiceState.id = allCustomVoices[0].id;
-            currentVoiceState.name = allCustomVoices[0].name;
-          } else {
-            currentVoiceState.type = 'base';
-            currentVoiceState.id = 'vi-VN-NamMinhNeural';
-            currentVoiceState.name = 'Nam Minh (Giọng Nam - Trầm ấm, tự nhiên)';
-          }
+        // Chỉ dùng model cá nhân nếu ID thực sự tồn tại trên backend.
+        const preferredId = currentVoiceState.type === 'custom'
+          ? currentVoiceState.id
+          : localStorage.getItem(SAVED_VOICE_KEY);
+        const exists = allCustomVoices.find(v => v.id === preferredId);
+        if (exists) {
+          currentVoiceState.type = 'custom';
+          currentVoiceState.id = exists.id;
+          currentVoiceState.name = exists.name;
+        } else if (allCustomVoices.length > 0) {
+          currentVoiceState.type = 'custom';
+          currentVoiceState.id = allCustomVoices[0].id;
+          currentVoiceState.name = allCustomVoices[0].name;
+          localStorage.setItem(SAVED_VOICE_KEY, currentVoiceState.id);
+        } else {
+          currentVoiceState.type = 'base';
+          currentVoiceState.id = 'vi-VN-NamMinhNeural';
+          currentVoiceState.name = 'Nam Minh (Giọng Nam - Trầm ấm, tự nhiên)';
+          localStorage.removeItem(SAVED_VOICE_KEY);
         }
 
         updateActiveVoiceDisplay();
       } catch (err) {
+        // Không để UI treo ở "Đang tải" và không tự nhận là đang dùng clone.
         console.error("Lỗi tải models:", err);
+        document.getElementById('activeVoiceDisplayName').innerText = 'Không kết nối được máy chủ TTS';
+        document.getElementById('activeVoiceTag').innerText = '⚠️ CHƯA XÁC NHẬN GIỌNG ĐÃ NẠP';
+        document.getElementById('activeVoiceTag').className = "px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/30";
       }
     }
 

@@ -267,7 +267,12 @@ async def generate_speech(req: TTSRequest):
     carrier_voice = req.voice
     if req.user_model_id and req.user_model_id != "none":
         model_info = voice_manager.get_model_info(req.user_model_id)
-        if model_info and model_info.get("base_voice"):
+        if not model_info:
+            raise HTTPException(
+                status_code=400,
+                detail="Không tìm thấy giọng đã nạp. Hãy tải lại danh sách giọng hoặc nạp lại file mẫu."
+            )
+        if model_info.get("base_voice"):
             carrier_voice = model_info["base_voice"]
 
     success_tts = False
@@ -317,6 +322,12 @@ async def generate_speech(req: TTSRequest):
         if success and converted_output_path.exists():
             working_audio = converted_output_path
             applied_custom_model = True
+        else:
+            # Không âm thầm trả về giọng nền rồi vẫn gắn nhãn là giọng clone.
+            raise HTTPException(
+                status_code=500,
+                detail="Không áp dụng được giọng đã nạp vào audio. Kiểm tra FFmpeg/Rubberband rồi thử lại."
+            )
 
     # 5. Nâng cấp giọng điệu, nhịp lấy hơi như người thật & phong cách
     try:
@@ -365,6 +376,7 @@ async def generate_speech(req: TTSRequest):
             "char_count": char_count,
             "voice": req.voice,
             "user_model": user_voice_name,
+            "custom_voice_applied": applied_custom_model,
             "voice_style": style_names.get(req.voice_style, req.voice_style),
             "pitch_percent": req.pitch_percent,
             "breath_mode": req.breath_mode
