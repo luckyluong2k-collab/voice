@@ -56,6 +56,7 @@
         <div>
           <div class="flex items-center gap-2">
             <h1 class="font-bold text-lg text-white tracking-tight">Viet Voice Studio</h1>
+            <span id="versionBadge" onclick="checkLatestVersion(true)" class="cursor-pointer hover:bg-slate-700/80 px-2 py-0.5 text-[10px] font-mono font-bold rounded-md bg-slate-800 text-slate-300 border border-slate-700 transition" title="Nhấn để kiểm tra cập nhật">v2.2</span>
             <span id="backendBadge" class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
               Máy chủ sẵn sàng
@@ -65,10 +66,14 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
-        <a href="https://github.com/luckyluong2k-collab/voice" target="_blank" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center gap-2 transition">
+      <div class="flex items-center gap-2.5">
+        <button onclick="checkLatestVersion(true)" id="btnCheckUpdate" class="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30 flex items-center gap-1.5 transition active:scale-95 shadow-sm" title="Kiểm tra phiên bản mới nhất từ GitHub">
+          <i class="fa-solid fa-rotate" id="checkUpdateIcon"></i>
+          <span id="checkUpdateText">Kiểm tra phiên bản</span>
+        </button>
+        <a href="https://github.com/luckyluong2k-collab/voice" target="_blank" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
           <i class="fa-brands fa-github text-white text-sm"></i>
-          <span>GitHub Repo</span>
+          <span>GitHub</span>
         </a>
         <button onclick="toggleGuideModal()" class="px-3 py-1.5 text-xs font-medium bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30 flex items-center gap-1.5 transition">
           <i class="fa-solid fa-circle-question"></i>
@@ -1266,9 +1271,266 @@ Ví dụ: Kính chào quý vị, [lấy hơi] hôm nay thời tiết rất đẹ
       };
     }
 
+    // ================= KHU VỰC KIỂM TRA PHIÊN BẢN & CẬP NHẬT =================
+    function toggleVersionModal(show) {
+      const m = document.getElementById('versionModal');
+      if (!m) return;
+      if (show) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      } else {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+    }
+
+    function toggleGuideModal(show = true) {
+      const m = document.getElementById('guideModal');
+      if (!m) return;
+      if (show) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      } else {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+    }
+
+    async function checkLatestVersion(openModal = true) {
+      const btn = document.getElementById('btnCheckUpdate');
+      const icon = document.getElementById('checkUpdateIcon');
+      const txt = document.getElementById('checkUpdateText');
+      const badge = document.getElementById('versionBadge');
+      
+      if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-emerald-400';
+      if (txt) txt.textContent = 'Đang kiểm tra...';
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/check-update');
+        const data = await res.json();
+        
+        const box = document.getElementById('versionStatusBox');
+        const timeEl = document.getElementById('versionCheckTime');
+        if (timeEl && data.checked_at) timeEl.textContent = data.checked_at;
+        
+        if (data.is_latest) {
+          if (box) {
+            box.className = 'p-4 rounded-xl border bg-emerald-500/10 border-emerald-500/30';
+            box.innerHTML = `
+              <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                  <i class="fa-solid fa-check text-base"></i>
+                </div>
+                <div class="space-y-1 flex-1">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-bold text-emerald-400">Phiên bản của bạn là mới nhất!</h4>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">LATEST</span>
+                  </div>
+                  <p class="text-xs text-slate-300">Ứng dụng hoàn toàn đồng bộ với nhánh <b>main</b> trên GitHub.</p>
+                  <div class="mt-2.5 pt-2.5 border-t border-emerald-500/20 text-[11px] text-slate-400 space-y-1 font-mono">
+                    <div class="flex items-center justify-between">
+                      <span>Phiên bản hiện tại:</span>
+                      <span class="text-white font-bold">v${data.current_version || '2.2.0'}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span>Mã Commit:</span>
+                      <span class="text-emerald-400 font-bold">${data.local_sha || '8ab24be'}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span>Thời gian cập nhật:</span>
+                      <span class="text-slate-300">${data.local_time || data.checked_at}</span>
+                    </div>
+                    <div class="text-slate-300 italic pt-1 line-clamp-2">"${data.local_message || 'Nâng cấp hệ thống'}"</div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }
+          if (txt) txt.textContent = 'Bản mới nhất';
+          if (icon) icon.className = 'fa-solid fa-circle-check text-emerald-400';
+          if (badge) badge.className = 'cursor-pointer px-2 py-0.5 text-[10px] font-mono font-bold rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        } else {
+          if (box) {
+            box.className = 'p-4 rounded-xl border bg-amber-500/10 border-amber-500/30';
+            box.innerHTML = `
+              <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                  <i class="fa-solid fa-arrow-up-from-bracket text-base"></i>
+                </div>
+                <div class="space-y-1 flex-1">
+                  <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-bold text-amber-400">Có bản cập nhật mới trên GitHub!</h4>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">UPDATE AVAILABLE</span>
+                  </div>
+                  <p class="text-xs text-slate-300">Đã phát hiện commit mới hơn trên GitHub repo.</p>
+                  <div class="mt-2.5 pt-2.5 border-t border-amber-500/20 text-[11px] text-slate-400 space-y-1 font-mono">
+                    <div class="flex items-center justify-between">
+                      <span>Bản đang chạy:</span>
+                      <span class="text-slate-300">${data.local_sha}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span>Bản mới nhất:</span>
+                      <span class="text-amber-400 font-bold">${data.remote_sha}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span>Ngày đẩy lên:</span>
+                      <span class="text-slate-300">${data.remote_date}</span>
+                    </div>
+                    <div class="text-slate-200 italic pt-1 line-clamp-2">"${data.remote_message}"</div>
+                  </div>
+                  <div class="pt-3">
+                    <a href="${data.repo_url}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs transition shadow-sm">
+                      <i class="fa-brands fa-github"></i>
+                      <span>Xem và cập nhật trên GitHub</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            `;
+          }
+          if (txt) txt.textContent = 'Có bản mới!';
+          if (icon) icon.className = 'fa-solid fa-arrow-up text-amber-400';
+          if (badge) badge.className = 'cursor-pointer px-2 py-0.5 text-[10px] font-mono font-bold rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse';
+        }
+        
+        if (openModal) {
+          toggleVersionModal(true);
+        }
+      } catch (err) {
+        console.error('Lỗi kiểm tra phiên bản:', err);
+        if (txt) txt.textContent = 'Kiểm tra phiên bản';
+        if (icon) icon.className = 'fa-solid fa-rotate';
+        alert('Không thể kết nối đến máy chủ để kiểm tra phiên bản: ' + err.message);
+      } finally {
+        if (btn) btn.disabled = false;
+        setTimeout(() => {
+          if (txt && txt.textContent === 'Bản mới nhất') {
+            txt.textContent = 'Kiểm tra phiên bản';
+            if (icon) icon.className = 'fa-solid fa-rotate';
+          }
+        }, 6000);
+      }
+    }
+
     // Khởi động
     refreshModels();
     loadHistory();
   </script>
+
+  <!-- Modal Kiểm Tra Phiên Bản -->
+  <div id="versionModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+            <i class="fa-solid fa-code-branch"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold text-white text-sm">Kiểm Tra Phiên Bản & Cập Nhật</h3>
+            <p class="text-[11px] text-slate-400">Đồng bộ trực tiếp với GitHub Repository</p>
+          </div>
+        </div>
+        <button onclick="toggleVersionModal(false)" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+      
+      <div class="p-5 space-y-4">
+        <div id="versionStatusBox" class="p-4 rounded-xl border bg-slate-800/60 border-slate-700/60">
+          <div class="flex items-center gap-3 text-slate-400 text-sm">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Đang tải thông tin phiên bản...</span>
+          </div>
+        </div>
+        
+        <div class="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 space-y-2 text-xs">
+          <div class="flex items-center justify-between text-slate-400">
+            <span>Kho lưu trữ:</span>
+            <a href="https://github.com/luckyluong2k-collab/voice" target="_blank" class="text-blue-400 hover:underline flex items-center gap-1 font-mono">
+              luckyluong2k-collab/voice
+              <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+            </a>
+          </div>
+          <div class="flex items-center justify-between text-slate-400">
+            <span>Nhánh phát hành:</span>
+            <span class="text-slate-200 font-mono font-semibold">main</span>
+          </div>
+          <div class="flex items-center justify-between text-slate-400">
+            <span>Lần kiểm tra cuối:</span>
+            <span id="versionCheckTime" class="text-slate-200 font-mono">Vừa xong</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between">
+        <a href="https://github.com/luckyluong2k-collab/voice/commits/main" target="_blank" class="text-xs text-slate-400 hover:text-blue-400 flex items-center gap-1 font-medium transition">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>Lịch sử commit</span>
+        </a>
+        <div class="flex items-center gap-2">
+          <button onclick="checkLatestVersion(false)" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate text-xs"></i>
+            <span>Kiểm tra lại</span>
+          </button>
+          <button onclick="toggleVersionModal(false)" class="px-4 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shadow-md shadow-blue-600/20">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Hướng Dẫn Nhanh -->
+  <div id="guideModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+            <i class="fa-solid fa-circle-question"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold text-white text-sm">Hướng Dẫn Sử Dụng Viet Voice Studio</h3>
+            <p class="text-[11px] text-slate-400">Các tính năng chính và phím tắt tiện ích</p>
+          </div>
+        </div>
+        <button onclick="toggleGuideModal(false)" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+      
+      <div class="p-5 space-y-3 text-xs text-slate-300">
+        <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1">
+          <div class="font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-wand-magic-sparkles text-blue-400"></i>
+            <span>1. Nhân bản giọng từ video / clip</span>
+          </div>
+          <p class="text-slate-400">Tải lên video MP4/MKV hoặc dán link YouTube/TikTok. Hệ thống sẽ tự động đo đạc cao độ F0, giới tính và dải âm sắc đặc trưng để tạo model giọng cá nhân.</p>
+        </div>
+
+        <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1">
+          <div class="font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-wind text-indigo-400"></i>
+            <span>2. Nhịp thở tự nhiên & Phong cách giọng</span>
+          </div>
+          <p class="text-slate-400">Bật <b>Nhịp lấy hơi như người thật</b> và chọn phong cách (Kể chuyện, Review TikTok, Tin tức) để giọng đọc có cảm xúc và khoảng ngắt chân thực.</p>
+        </div>
+
+        <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-1">
+          <div class="font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-code-branch text-emerald-400"></i>
+            <span>3. Kiểm tra phiên bản mới</span>
+          </div>
+          <p class="text-slate-400">Bấm vào nút <b>Kiểm tra phiên bản</b> trên góc phải thanh điều hướng bất cứ lúc nào để biết hệ thống đã đồng bộ với GitHub hay chưa.</p>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-900/90 border-t border-slate-800 flex justify-end">
+        <button onclick="toggleGuideModal(false)" class="px-4 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition">
+          Đã hiểu
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

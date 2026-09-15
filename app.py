@@ -103,6 +103,31 @@ def format_natural_text(text: str, pause_style: str) -> str:
     processed = re.sub(r'[ \t]+', ' ', processed)
     return processed.strip()
 
+GITHUB_REPO = "luckyluong2k-collab/voice"
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+def get_local_git_info():
+    try:
+        import dulwich.repo
+        repo = dulwich.repo.Repo(str(BASE_DIR))
+        head_sha = repo.head().decode("utf-8")
+        commit = repo[head_sha.encode("utf-8")]
+        return {
+            "sha": head_sha,
+            "short_sha": head_sha[:7],
+            "message": commit.message.decode("utf-8", errors="ignore").strip(),
+            "time": datetime.fromtimestamp(commit.commit_time).strftime("%d/%m/%Y %H:%M:%S"),
+            "author": commit.author.decode("utf-8", errors="ignore")
+        }
+    except Exception as e:
+        return {
+            "sha": "8ab24be",
+            "short_sha": "8ab24be",
+            "message": "Viet Voice Studio v2.2 - Clone & TTS Tiếng Việt",
+            "time": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            "author": "Viet Voice Team"
+        }
+
 @app.get("/api/health")
 def health_check():
     return {
@@ -110,6 +135,81 @@ def health_check():
         "service": "Viet Voice Studio",
         "time": datetime.now().isoformat()
     }
+
+@app.get("/api/version")
+def get_version():
+    local_info = get_local_git_info()
+    return {
+        "version": "2.2.0",
+        "local": local_info,
+        "repo": f"https://github.com/{GITHUB_REPO}"
+    }
+
+@app.get("/api/check-update")
+def check_update():
+    import requests
+    local_info = get_local_git_info()
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/commits/main"
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "VietVoiceStudio/2.2"
+    }
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"token {GITHUB_TOKEN}"
+
+    try:
+        r = requests.get(url, headers=headers, timeout=8)
+        if r.status_code == 200:
+            data = r.json()
+            remote_sha = data.get("sha", "")
+            remote_msg = data.get("commit", {}).get("message", "").strip()
+            remote_date_raw = data.get("commit", {}).get("committer", {}).get("date", "")
+            
+            # Format ngày tháng
+            remote_date_formatted = remote_date_raw
+            try:
+                dt = datetime.fromisoformat(remote_date_raw.replace("Z", "+00:00"))
+                remote_date_formatted = dt.strftime("%d/%m/%Y %H:%M:%S")
+            except:
+                pass
+
+            is_latest = (local_info["sha"] == remote_sha) or (local_info["short_sha"] == remote_sha[:7])
+            
+            return {
+                "status": "success",
+                "is_latest": is_latest,
+                "current_version": "2.2.0",
+                "local_sha": local_info["short_sha"],
+                "local_message": local_info["message"],
+                "local_time": local_info["time"],
+                "remote_sha": remote_sha[:7],
+                "remote_message": remote_msg,
+                "remote_date": remote_date_formatted,
+                "repo_url": f"https://github.com/{GITHUB_REPO}",
+                "checked_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"GitHub API trả về HTTP {r.status_code}",
+                "is_latest": True,
+                "current_version": "2.2.0",
+                "local_sha": local_info["short_sha"],
+                "local_message": local_info["message"],
+                "local_time": local_info["time"],
+                "checked_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Không thể kết nối đến GitHub: {str(e)}",
+            "is_latest": True,
+            "current_version": "2.2.0",
+            "local_sha": local_info["short_sha"],
+            "local_message": local_info["message"],
+            "local_time": local_info["time"],
+            "checked_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        }
 
 @app.get("/api/models")
 def get_user_models():
