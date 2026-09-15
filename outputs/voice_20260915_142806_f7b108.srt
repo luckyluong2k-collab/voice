@@ -1,0 +1,8 @@
+1
+00:00:00,100 --> 00:00:02,587
+Kính chào quý vị khán giả.
+
+2
+00:00:02,537 --> 00:00:05,750
+Hôm nay chúng tôi xin giới thiệu bản tin đặc biệt.
+

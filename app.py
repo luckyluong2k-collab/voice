@@ -5,7 +5,7 @@ import uuid
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 # Đảm bảo UTF-8 trên Windows console
 if sys.platform == "win32":
@@ -25,6 +25,8 @@ from pydantic import BaseModel
 
 import edge_tts
 from voice_converter import VoiceManager
+from text_normalizer import normalize_vietnamese_text
+from subtitle_generator import SubtitleGenerator
 
 BASE_DIR = Path(__file__).resolve().parent
 MODELS_DIR = BASE_DIR / "models"
@@ -38,7 +40,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 voice_manager = VoiceManager(str(MODELS_DIR))
 
-app = FastAPI(title="Viet Voice Studio - Clone & TTS Tiếng Việt", version="1.0.0")
+app = FastAPI(title="Viet Voice Studio - Clone & TTS Tiếng Việt", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,18 +52,14 @@ app.add_middleware(
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "vi-VN-NamMinhNeural"  # hoặc vi-VN-HoaiMyNeural
-    rate: str = "+0%"                  # -30% đến +50%
-    pitch: str = "+0Hz"                # -50Hz đến +50Hz
-    pause_style: str = "natural"       # natural, standard, long
-    user_model_id: Optional[str] = None # ID model giọng cá nhân nếu có
+    voice: str = "vi-VN-NamMinhNeural"
+    rate: str = "+0%"
+    pitch: str = "+0Hz"
+    pause_style: str = "natural"
+    user_model_id: Optional[str] = None
+    auto_normalize: bool = True
 
 def format_natural_text(text: str, pause_style: str) -> str:
-    """
-    Chuẩn hóa văn bản tiếng Việt để Microsoft Neural TTS ngắt nghỉ tự nhiên nhất:
-    - Xử lý các tag [nghỉ 0.5s], [nghi 1s] thành khoảng dừng ngữ âm (... hoặc dấu phẩy ngắt dòng)
-    - Tự động chuẩn hóa dấu câu tiếng Việt để không bị đọc dồn dập
-    """
     def replace_break_tag(match):
         val_str = match.group(1).replace(",", ".")
         try:
@@ -75,7 +73,6 @@ def format_natural_text(text: str, pause_style: str) -> str:
         except:
             return ", "
 
-    # Xóa dấu câu liền kề trước hoặc sau tag [nghỉ ...] để tránh sinh ra dạng . ...
     processed = re.sub(
         r"[.,;:?!]*\s*\[(?:nghỉ|nghi|dừng|dung|pause)\s*([\d\.]+)\s*(?:s|giây|giay)?\]\s*[.,;:?!]*",
         replace_break_tag,
@@ -86,12 +83,9 @@ def format_natural_text(text: str, pause_style: str) -> str:
     if pause_style == "long":
         processed = re.sub(r'([.?!]+)(?=\s|$)', r'... ', processed)
 
-    # Loại bỏ lặp dấu chấm
     processed = re.sub(r'\.{4,}', '...', processed)
     processed = re.sub(r'\.\s*\.\.\.', '...', processed)
     processed = re.sub(r'\.\.\.\s*\.', '...', processed)
-
-    # Chuẩn hóa khoảng trắng
     processed = re.sub(r'[ \t]+', ' ', processed)
     return processed.strip()
 
@@ -126,30 +120,56 @@ def get_base_voices():
         }
     ]
 
+@app.post("/api/normalize-text")
+def api_normalize_text(data: dict):
+    raw_text = data.get("text", "")
+    return {"normalized_text": normalize_vietnamese_text(raw_text)}
+
 @app.post("/api/tts")
 async def generate_speech(req: TTSRequest):
     if not req.text or not req.text.strip():
         raise HTTPException(status_code=400, detail="Vui lòng nhập văn bản cần đọc.")
 
     raw_text = req.text.strip()
-    clean_text = format_natural_text(raw_text, req.pause_style)
+    
+    # 1. Chuẩn hóa viết tắt & số nếu được bật
+    if req.auto_normalize:
+        working_text = normalize_vietnamese_text(raw_text)
+    else:
+        working_text = raw_text
+
+    # 2. Xử lý ngắt nghỉ tự nhiên
+    clean_text = format_natural_text(working_text, req.pause_style)
     
     file_id = f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     base_output_path = OUTPUTS_DIR / f"{file_id}_base.mp3"
     final_output_path = OUTPUTS_DIR / f"{file_id}.mp3"
+    srt_output_path = OUTPUTS_DIR / f"{file_id}.srt"
 
-    # Tạo file âm thanh với cơ chế thử lại tự động (retry) chống nghẽn mạng
+    # 3. Tổng hợp giọng đọc & tạo phụ đề SRT
     success_tts = False
     last_error = None
+    sub_generator = SubtitleGenerator()
+
     for attempt in range(4):
         try:
             communicate = edge_tts.Communicate(
                 text=clean_text, 
                 voice=req.voice, 
                 rate=req.rate, 
-                pitch=req.pitch
+                pitch=req.pitch,
+                boundary="SentenceBoundary"
             )
-            await communicate.save(str(base_output_path))
+            
+            with open(base_output_path, "wb") as f_audio:
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        f_audio.write(chunk["data"])
+                    elif chunk["type"] in ("WordBoundary", "SentenceBoundary"):
+                        sub_generator.feed(chunk)
+
+            # Lưu file phụ đề SRT
+            sub_generator.save_srt(str(srt_output_path))
             success_tts = True
             break
         except Exception as e:
@@ -161,7 +181,7 @@ async def generate_speech(req: TTSRequest):
         print(f"[Lỗi Edge-TTS cuối cùng] {last_error}")
         raise HTTPException(status_code=500, detail=f"Lỗi khi tổng hợp giọng nói: {str(last_error)}")
 
-    # Nếu có model cá nhân được chọn, thực hiện chuyển giọng
+    # 4. Áp dụng model giọng cá nhân nếu có
     if req.user_model_id and req.user_model_id != "none":
         success = voice_manager.apply_voice_conversion(
             input_wav=str(base_output_path),
@@ -176,10 +196,13 @@ async def generate_speech(req: TTSRequest):
     word_count = len(raw_text.split())
     char_count = len(raw_text)
 
+    has_srt = srt_output_path.exists() and srt_output_path.stat().st_size > 0
+
     return {
         "status": "success",
         "file_name": final_output_path.name,
         "audio_url": f"/api/audio/{final_output_path.name}",
+        "subtitle_url": f"/api/subtitle/{srt_output_path.name}" if has_srt else None,
         "stats": {
             "word_count": word_count,
             "char_count": char_count,
@@ -195,46 +218,41 @@ def get_audio_file(filename: str):
         raise HTTPException(status_code=404, detail="Không tìm thấy file âm thanh.")
     return FileResponse(path=file_path, media_type="audio/mpeg", filename=filename)
 
+@app.get("/api/subtitle/{filename}")
+def get_subtitle_file(filename: str):
+    file_path = OUTPUTS_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Không tìm thấy file phụ đề.")
+    return FileResponse(
+        path=file_path, 
+        media_type="text/plain; charset=utf-8", 
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 @app.get("/api/history")
 def get_history():
     files = sorted(OUTPUTS_DIR.glob("*.mp3"), key=os.path.getmtime, reverse=True)
     history = []
-    for f in files[:20]:
+    for f in files[:25]:
         if f.name.endswith("_base.mp3"):
             continue
+        srt_file = f.with_suffix(".srt")
+        has_srt = srt_file.exists()
         history.append({
             "filename": f.name,
             "url": f"/api/audio/{f.name}",
+            "subtitle_url": f"/api/subtitle/{srt_file.name}" if has_srt else None,
             "time": datetime.fromtimestamp(f.stat().st_mtime).strftime("%H:%M - %d/%m/%Y"),
             "size_kb": round(f.stat().st_size / 1024, 1)
         })
     return history
-
-@app.post("/api/upload-model")
-async def upload_model(file: UploadFile = File(...)):
-    if not (file.filename.endswith(".pth") or file.filename.endswith(".index")):
-        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file model .pth hoặc .index")
-    
-    save_path = MODELS_DIR / file.filename
-    with open(save_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
-        
-    return {
-        "status": "success",
-        "message": f"Đã lưu thành công model: {file.filename}",
-        "models": voice_manager.list_models()
-    }
 
 @app.post("/api/extract-clip-voice")
 async def extract_clip_voice(
     file: UploadFile = File(...),
     voice_name: str = Form("")
 ):
-    """
-    Trích xuất âm thanh giọng nói từ file video hoặc audio clip.
-    Hỗ trợ .mp4, .mov, .mkv, .avi, .webm, .mp3, .m4a, v.v.
-    """
     valid_exts = (
         ".mp4", ".mov", ".mkv", ".avi", ".webm", ".flv", ".wmv", ".m4v",
         ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"
@@ -243,23 +261,20 @@ async def extract_clip_voice(
     if file_ext not in valid_exts:
         raise HTTPException(
             status_code=400, 
-            detail=f"Định dạng {file_ext} không hỗ trợ. Vui lòng chọn file video (mp4, mov, mkv, webm...) hoặc audio (mp3, wav, m4a...)"
+            detail=f"Định dạng {file_ext} không hỗ trợ. Vui lòng chọn file video hoặc audio."
         )
 
-    # Chuẩn hóa tên giọng
     clean_name = voice_name.strip() if voice_name else Path(file.filename).stem
     clean_name = re.sub(r'[^\w\s-]', '', clean_name).strip().replace(" ", "_")
     if not clean_name:
         clean_name = f"giong_clip_{uuid.uuid4().hex[:4]}"
 
-    # Lưu tạm clip vào thư mục uploads
     temp_input = UPLOADS_DIR / f"temp_{uuid.uuid4().hex[:8]}{file_ext}"
     try:
         with open(temp_input, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
 
-        # Trích xuất giọng bằng FFmpeg
         result = voice_manager.extract_voice_from_clip(
             input_media_path=str(temp_input),
             output_name=clean_name
@@ -281,6 +296,50 @@ async def extract_clip_voice(
             except Exception:
                 pass
 
+@app.post("/api/extract-url-voice")
+async def extract_url_voice(
+    url: str = Form(...),
+    voice_name: str = Form("")
+):
+    if not url or not url.strip():
+        raise HTTPException(status_code=400, detail="Vui lòng nhập đường link hợp lệ.")
+
+    target_url = url.strip()
+    clean_name = voice_name.strip() if voice_name else f"giong_url_{uuid.uuid4().hex[:4]}"
+    clean_name = re.sub(r'[^\w\s-]', '', clean_name).strip().replace(" ", "_")
+
+    try:
+        result = voice_manager.extract_voice_from_url(
+            url=target_url,
+            voice_name=clean_name,
+            uploads_dir=UPLOADS_DIR
+        )
+        return {
+            "status": "success",
+            "message": f"Tải và trích xuất thành công giọng từ link: {clean_name}",
+            "voice": result,
+            "models": voice_manager.list_models()
+        }
+    except Exception as e:
+        print(f"[Lỗi trích xuất URL] {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi khi lấy giọng từ link: {str(e)}")
+
+@app.post("/api/upload-model")
+async def upload_model(file: UploadFile = File(...)):
+    if not (file.filename.endswith(".pth") or file.filename.endswith(".index")):
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file model .pth hoặc .index")
+    
+    save_path = MODELS_DIR / file.filename
+    with open(save_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+        
+    return {
+        "status": "success",
+        "message": f"Đã lưu thành công model: {file.filename}",
+        "models": voice_manager.list_models()
+    }
+
 @app.get("/api/audio-extracted/{filename}")
 def get_extracted_audio(filename: str):
     file_path = voice_manager.extracted_dir / filename
@@ -292,27 +351,15 @@ def get_extracted_audio(filename: str):
 
 @app.get("/")
 def serve_index():
-    index_path = WEB_DIR / "index.html"
-    if not index_path.exists():
-        return JSONResponse({"message": "Web UI đang khởi tạo..."})
-    return FileResponse(index_path)
+    # Ưu tiên index.html ở root hoặc trong web/
+    root_index = BASE_DIR / "index.html"
+    web_index = WEB_DIR / "index.html"
+    if root_index.exists():
+        return FileResponse(root_index)
+    if web_index.exists():
+        return FileResponse(web_index)
+    return JSONResponse({"message": "Web UI đang khởi tạo..."})
 
 if __name__ == "__main__":
     import uvicorn
-    import sys
-    
-    if "--test" in sys.argv:
-        print("[Test] Đang kiểm tra sinh giọng nói mẫu...")
-        async def run_test():
-            comm = edge_tts.Communicate("Xin chào, đây là bài kiểm tra âm thanh tiếng Việt từ Viet Voice Studio.", "vi-VN-NamMinhNeural")
-            test_file = OUTPUTS_DIR / "test.mp3"
-            await comm.save(str(test_file))
-            print(f"[Test Thành Công] File đã tạo: {test_file} ({test_file.stat().st_size} bytes)")
-        asyncio.run(run_test())
-        sys.exit(0)
-        
-    print("=" * 60)
-    print("  VIET VOICE STUDIO - CÔNG CỤ NHÂN BẢN GIỌNG NÓI & TTS")
-    print("  Đang chạy tại: http://127.0.0.1:7860")
-    print("=" * 60)
     uvicorn.run(app, host="127.0.0.1", port=7860, log_level="info")
