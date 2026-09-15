@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Viet Voice Studio - Công Cụ Đọc Văn Bản & Nhân Bản Giọng Nói</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(30, 41, 59, 0.5);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 9999px;
+    }
+    .gradient-border {
+      position: relative;
+      background: linear-gradient(60deg, #3b82f6, #8b5cf6, #ec4899);
+      padding: 1px;
+      border-radius: 0.75rem;
+    }
+    .gradient-border > div {
+      background: #0f172a;
+      border-radius: calc(0.75rem - 1px);
+    }
+    .pulse-record {
+      animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
+          <i class="fa-solid fa-microphone-lines text-white text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-lg text-white">Viet Voice Studio</h1>
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+              Sẵn sàng
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Nhân bản giọng nói & Đọc văn bản Tiếng Việt 3 miền</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button onclick="toggleGuideModal()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center gap-2 transition">
+          <i class="fa-solid fa-circle-question text-blue-400"></i>
+          Hướng dẫn nạp giọng 5 phút
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Cột trái: Soạn thảo văn bản & Điều khiển (7 cột) -->
+    <section class="lg:col-span-7 flex flex-col gap-5">
+      
+      <!-- Khung nhập văn bản -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col flex-1">
+        <div class="flex items-center justify-between mb-3">
+          <label class="font-semibold text-sm text-slate-200 flex items-center gap-2">
+            <i class="fa-solid fa-file-lines text-blue-400"></i>
+            Nội dung văn bản cần đọc
+          </label>
+          <div class="flex items-center gap-3 text-xs text-slate-400">
+            <span id="wordCount">0 từ</span>
+            <span>•</span>
+            <span id="charCount">0 ký tự</span>
+          </div>
+        </div>
+
+        <!-- Quick Pause Tags / Shortcuts -->
+        <div class="flex flex-wrap items-center gap-1.5 mb-3 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 text-xs">
+          <span class="text-slate-400 mr-1 font-medium"><i class="fa-solid fa-pause text-indigo-400"></i> Chèn ngắt nghỉ:</span>
+          <button onclick="insertPause('0.3s')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition border border-slate-700/50">+ Nghỉ 0.3s</button>
+          <button onclick="insertPause('0.5s')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition border border-slate-700/50">+ Nghỉ 0.5s</button>
+          <button onclick="insertPause('1.0s')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition border border-slate-700/50">+ Nghỉ 1s</button>
+          <div class="ml-auto flex items-center gap-1">
+            <button onclick="loadSampleText('news')" class="px-2 py-1 text-blue-400 hover:text-blue-300 transition">Mẫu Tin tức</button>
+            <span class="text-slate-600">|</span>
+            <button onclick="loadSampleText('story')" class="px-2 py-1 text-indigo-400 hover:text-indigo-300 transition">Mẫu Kể chuyện</button>
+            <span class="text-slate-600">|</span>
+            <button onclick="clearText()" class="px-2 py-1 text-rose-400 hover:text-rose-300 transition">Xóa hết</button>
+          </div>
+        </div>
+
+        <textarea 
+          id="inputText"
+          rows="10"
+          placeholder="Dán hoặc gõ văn bản tiếng Việt của bạn vào đây... 
+Hệ thống sẽ tự động ngắt nghỉ câu tự nhiên theo dấu chấm, dấu phẩy, hoặc bạn có thể bấm các nút [Nghỉ 0.5s] ở trên để dừng đúng ý muốn."
+          class="w-full bg-slate-950/80 text-slate-200 p-4 rounded-xl border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-y text-sm leading-relaxed custom-scrollbar transition placeholder:text-slate-600"
+          oninput="updateCounts()"
+        ></textarea>
+
+        <!-- Bảng điều khiển cấu hình âm thanh -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-800">
+          <!-- Chọn giọng đọc nền -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              <i class="fa-solid fa-user-tie text-blue-400 mr-1"></i> Giọng nền tiếng Việt
+            </label>
+            <select id="baseVoice" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-blue-500">
+              <option value="vi-VN-NamMinhNeural">Nam Minh (Giọng Nam - Trầm ấm, truyền cảm)</option>
+              <option value="vi-VN-HoaiMyNeural">Hoài My (Giọng Nữ - Nhẹ nhàng, trong trẻo)</option>
+            </select>
+          </div>
+
+          <!-- Model giọng cá nhân đã nạp -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+              <span><i class="fa-solid fa-fingerprint text-purple-400 mr-1"></i> Model giọng của bạn</span>
+              <button onclick="refreshModels()" class="text-[10px] text-purple-400 hover:underline"><i class="fa-solid fa-rotate mr-0.5"></i> Làm mới</button>
+            </label>
+            <select id="userModel" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-purple-500">
+              <option value="none">Giọng nền chuẩn (Chưa nạp model riêng)</option>
+            </select>
+          </div>
+
+          <!-- Tốc độ đọc -->
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <label class="font-semibold text-slate-300">
+                <i class="fa-solid fa-gauge-high text-amber-400 mr-1"></i> Tốc độ đọc
+              </label>
+              <span id="rateValue" class="text-amber-400 font-mono font-medium">Bình thường (1.0x)</span>
+            </div>
+            <input 
+              type="range" 
+              id="speechRate" 
+              min="-30" 
+              max="50" 
+              value="0" 
+              step="5"
+              oninput="updateRateLabel(this.value)"
+              class="w-full accent-blue-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+            >
+          </div>
+
+          <!-- Kiểu ngắt nghỉ -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              <i class="fa-solid fa-lungs text-emerald-400 mr-1"></i> Ngắt nghỉ hơi thở
+            </label>
+            <select id="pauseStyle" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-emerald-500">
+              <option value="natural">Tự nhiên (Nghỉ 250ms dấu phẩy, 500ms dấu chấm)</option>
+              <option value="long">Chậm rãi / Kể chuyện (Nghỉ dài hơn, truyền cảm)</option>
+              <option value="standard">Tiêu chuẩn AI</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Nút Tạo Giọng Nói Chính -->
+        <button 
+          id="btnGenerate"
+          onclick="generateAudio()"
+          class="mt-5 w-full py-3.5 px-6 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25 active:scale-[0.99] transition flex items-center justify-center gap-2 group cursor-pointer"
+        >
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-300 group-hover:rotate-12 transition transform"></i>
+          <span>TẠO GIỌNG NÓI NGAY (Ctrl + Enter)</span>
+        </button>
+
+      </div>
+    </section>
+
+    <!-- Cột phải: Nghe thử, Tải về & Nạp giọng (5 cột) -->
+    <section class="lg:col-span-5 flex flex-col gap-5">
+      
+      <!-- Hộp phát âm thanh Audio Player -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2 mb-4">
+          <i class="fa-solid fa-circle-play text-emerald-400 text-base"></i>
+          Kết quả âm thanh
+        </h2>
+
+        <div id="playerEmpty" class="py-10 text-center flex flex-col items-center justify-center text-slate-500">
+          <div class="w-14 h-14 rounded-full bg-slate-800/80 flex items-center justify-center mb-3">
+            <i class="fa-solid fa-headphones text-xl text-slate-400"></i>
+          </div>
+          <p class="text-xs">Chưa có âm thanh được tạo.</p>
+          <p class="text-[11px] text-slate-600 mt-1">Nhập văn bản và nhấn nút "Tạo giọng nói" để nghe.</p>
+        </div>
+
+        <div id="playerContent" class="hidden">
+          <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-4">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+              <span id="resVoiceName" class="font-medium text-slate-300">Nam Minh</span>
+              <span id="resWordCount" class="font-mono text-emerald-400">0 từ</span>
+            </div>
+            
+            <audio id="audioPlayer" controls class="w-full mt-2"></audio>
+          </div>
+
+          <a 
+            id="downloadBtn" 
+            href="#" 
+            download="viet_voice.mp3"
+            class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+          >
+            <i class="fa-solid fa-download"></i>
+            TẢI FILE ÂM THANH (.MP3)
+          </a>
+        </div>
+      </div>
+
+      <!-- KHU VỰC 1: ĐƯA CLIP VÀO LẤY GIỌNG (MỚI) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2">
+            <i class="fa-solid fa-film text-blue-400 text-base"></i>
+            Đưa Clip vào lấy giọng
+          </h2>
+          <span class="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20 font-medium">
+            Tự động tách & lọc ồn
+          </span>
+        </div>
+
+        <p class="text-xs text-slate-400 leading-relaxed mb-3">
+          Tải lên video (MP4, MOV, MKV, WebM, TikTok, YouTube...) hoặc file ghi âm. AI sẽ tự động tách lời nói từ clip và lưu thành giọng của bạn:
+        </p>
+
+        <!-- Khung chọn tên giọng -->
+        <div class="mb-3">
+          <input 
+            type="text" 
+            id="clipVoiceName" 
+            placeholder="Tên giọng (ví dụ: Giọng của tôi trong clip, Giọng TikTok...)"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-blue-500 transition placeholder:text-slate-600"
+          >
+        </div>
+
+        <!-- Khung thả file clip -->
+        <div 
+          id="clipDropArea"
+          onclick="document.getElementById('clipFileInput').click()"
+          class="border-2 border-dashed border-slate-700 hover:border-blue-500 bg-slate-950/60 hover:bg-blue-950/10 rounded-xl p-5 text-center cursor-pointer transition flex flex-col items-center justify-center group"
+        >
+          <input 
+            type="file" 
+            id="clipFileInput" 
+            accept="video/*,audio/*,.mp4,.mov,.mkv,.avi,.webm,.mp3,.wav,.m4a" 
+            class="hidden" 
+            onchange="handleClipSelect(this.files[0])"
+          >
+          <div class="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center mb-2 group-hover:scale-110 transition">
+            <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+          </div>
+          <span id="clipFileLabel" class="text-xs font-medium text-slate-300">Bấm để chọn Clip video hoặc file âm thanh</span>
+          <span class="text-[10px] text-slate-500 mt-1">Hỗ trợ: MP4, MOV, MKV, WebM, MP3, M4A, WAV</span>
+        </div>
+
+        <!-- Nút Trích xuất giọng -->
+        <button 
+          id="btnExtractClip"
+          onclick="submitExtractClip()"
+          class="mt-3 w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+        >
+          <i class="fa-solid fa-scissors"></i>
+          <span>TÁCH VÀ LẤY GIỌNG TỪ CLIP NÀY</span>
+        </button>
+
+        <!-- Trạng thái trích xuất -->
+        <div id="clipExtractStatus" class="mt-3 text-xs hidden"></div>
+
+        <!-- Kết quả sau khi trích xuất -->
+        <div id="clipExtractResult" class="mt-3 p-3 rounded-xl bg-slate-950 border border-slate-800 hidden">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <span class="text-emerald-400 font-medium flex items-center gap-1">
+              <i class="fa-solid fa-circle-check"></i> Đã trích xuất giọng thành công!
+            </span>
+            <span id="clipVoiceSize" class="text-[10px] text-slate-500">0 KB</span>
+          </div>
+          <audio id="clipAudioPreview" controls class="w-full h-8"></audio>
+          <p class="text-[11px] text-slate-400 mt-2">
+            👉 Giọng này đã được tự động chọn vào mục <strong>"Model giọng của bạn"</strong> ở cột bên trái!
+          </p>
+        </div>
+      </div>
+
+      <!-- KHU VỰC 2: Nạp file model .pth (Tùy chọn) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <details class="group">
+          <summary class="flex items-center justify-between cursor-pointer list-none text-xs font-semibold text-slate-300">
+            <span class="flex items-center gap-2">
+              <i class="fa-solid fa-folder-tree text-purple-400"></i>
+              Nạp file model đã train sẵn (.pth)
+            </span>
+            <span class="text-[10px] text-slate-500 group-open:rotate-180 transition transform">
+              <i class="fa-solid fa-chevron-down"></i>
+            </span>
+          </summary>
+          <div class="mt-3 pt-3 border-t border-slate-800 text-xs">
+            <p class="text-slate-400 mb-2 text-[11px]">Dành cho người đã train model RVC (.pth):</p>
+            <div 
+              onclick="document.getElementById('fileModelInput').click()"
+              class="border border-dashed border-slate-700 hover:border-purple-500 bg-slate-950/40 rounded-xl p-3 text-center cursor-pointer transition text-[11px] text-slate-400"
+            >
+              <input type="file" id="fileModelInput" accept=".pth,.index" class="hidden" onchange="uploadModelFile(this.files[0])">
+              <i class="fa-solid fa-file-arrow-up text-purple-400 mr-1"></i> Bấm để chọn file .pth
+            </div>
+            <div id="uploadStatus" class="mt-2 text-xs hidden"></div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Lịch sử các bản đọc gần đây -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex-1">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-xs text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-clock-rotate-left text-slate-400"></i> Lịch sử gần đây
+          </h2>
+          <button onclick="loadHistory()" class="text-[11px] text-blue-400 hover:underline">Tải lại</button>
+        </div>
+        <div id="historyList" class="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar text-xs">
+          <p class="text-slate-500 text-center py-4 text-[11px]">Chưa có lịch sử.</p>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Modal Hướng dẫn thu âm 5 phút -->
+  <div id="guideModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 class="font-bold text-base text-white flex items-center gap-2">
+          <i class="fa-solid fa-book-open text-blue-400"></i>
+          Hướng dẫn Thu âm & Nạp giọng cá nhân trọn đời
+        </h3>
+        <button onclick="toggleGuideModal()" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="mt-4 space-y-4 text-xs text-slate-300 leading-relaxed">
+        <div class="bg-blue-950/40 border border-blue-800/40 p-3 rounded-xl">
+          <p class="font-semibold text-blue-300 mb-1">🎯 Mục tiêu:</p>
+          <p>Tạo ra 1 file model định dạng <code class="bg-slate-800 text-white px-1.5 py-0.5 rounded">ten_ban.pth</code> mang chính xác 95% âm sắc, độ trầm bổng và phương ngữ (Bắc, Trung, Nam) của bạn để dùng vĩnh viễn.</p>
+        </div>
+
+        <div class="space-y-2">
+          <p class="font-bold text-white text-sm">Bước 1: Thu âm giọng nói của bạn (5–10 phút)</p>
+          <ul class="list-disc list-inside space-y-1 pl-2 text-slate-300">
+            <li>Dùng điện thoại (ứng dụng Ghi âm có sẵn) hoặc tai nghe micro.</li>
+            <li>Ngồi trong phòng yên tĩnh, không bật quạt chĩa thẳng vào mic, không có tiếng ồn xe cộ.</li>
+            <li>Mở một bài báo hoặc cuốn sách bất kỳ, đọc tự nhiên bằng đúng giọng hàng ngày của bạn.</li>
+            <li>Xuất file ghi âm thành định dạng <code class="text-amber-300">.wav</code> hoặc <code class="text-amber-300">.mp3</code>.</li>
+          </ul>
+        </div>
+
+        <div class="space-y-2">
+          <p class="font-bold text-white text-sm">Bước 2: Cho AI học giọng (Train 10 phút trên Colab Free)</p>
+          <ul class="list-disc list-inside space-y-1 pl-2 text-slate-300">
+            <li>Mở bộ công cụ huấn luyện RVC v2 (miễn phí qua Google Colab có GPU T4).</li>
+            <li>Upload file ghi âm của bạn lên và nhấn nút <strong>Train</strong>.</li>
+            <li>Sau 10–15 phút, tải về file có đuôi <code class="text-purple-400 font-bold">.pth</code>.</li>
+          </ul>
+        </div>
+
+        <div class="space-y-2">
+          <p class="font-bold text-white text-sm">Bước 3: Nạp vào Tool</p>
+          <p>Kéo thả file <code class="text-purple-400 font-bold">.pth</code> vào mục <strong>"Nạp file giọng của bạn"</strong> ở góc phải giao diện Tool này, hoặc copy trực tiếp vào thư mục:</p>
+          <pre class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 font-mono text-[11px] text-emerald-400 select-all">viet_voice_clone/models/</pre>
+          <p>Sau đó bấm <strong>Làm mới</strong>, chọn tên của bạn và bấm tạo giọng!</p>
+        </div>
+      </div>
+
+      <div class="mt-6 pt-4 border-t border-slate-800 flex justify-end">
+        <button onclick="toggleGuideModal()" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs">
+          Đã hiểu, đóng hướng dẫn
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sampleTexts = {
+      news: "Kính chào quý vị và các bạn. [nghỉ 0.5s] Hôm nay, trung tâm dự báo khí tượng thủy văn cho biết thời tiết trên cả nước sẽ có nhiều chuyển biến tích cực. [nghỉ 0.5s] Các tỉnh miền Bắc trời chuyển nắng nhẹ vào buổi trưa, trong khi khu vực Nam Bộ tiếp tục duy trì hình thái ngày nắng ráo, đêm không mưa.",
+      story: "Ngày xửa ngày xưa, [nghỉ 0.5s] ở một ngôi làng nhỏ ven chân núi, [nghỉ 0.3s] có một người thợ mộc cần mẫn sống cùng gia đình. [nghỉ 0.8s] Mỗi buổi sớm tinh sương, khi tiếng gà gáy đầu tiên vừa cất lên, [nghỉ 0.3s] bác đã thức dậy chuẩn bị đồ nghề cho một ngày làm việc mới."
+    };
+
+    function updateCounts() {
+      const text = document.getElementById('inputText').value.trim();
+      const words = text ? text.split(/\s+/).length : 0;
+      const chars = text.length;
+      document.getElementById('wordCount').innerText = `${words} từ`;
+      document.getElementById('charCount').innerText = `${chars} ký tự`;
+    }
+
+    function insertPause(duration) {
+      const textarea = document.getElementById('inputText');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const tag = ` [nghỉ ${duration}] `;
+      textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+      updateCounts();
+    }
+
+    function loadSampleText(type) {
+      document.getElementById('inputText').value = sampleTexts[type] || "";
+      updateCounts();
+    }
+
+    function clearText() {
+      document.getElementById('inputText').value = "";
+      updateCounts();
+    }
+
+    function updateRateLabel(val) {
+      val = parseInt(val);
+      const label = document.getElementById('rateValue');
+      if (val === 0) {
+        label.innerText = "Bình thường (1.0x)";
+      } else if (val > 0) {
+        label.innerText = `Nhanh hơn (+${val}%)`;
+      } else {
+        label.innerText = `Chậm hơn (${val}%)`;
+      }
+    }
+
+    function toggleGuideModal() {
+      const modal = document.getElementById('guideModal');
+      modal.classList.toggle('hidden');
+    }
+
+    // Lắng nghe Ctrl + Enter
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        generateAudio();
+      }
+    });
+
+    async function refreshModels() {
+      try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        const select = document.getElementById('userModel');
+        select.innerHTML = '<option value="none">Giọng nền chuẩn (Chưa nạp model riêng)</option>';
+        if (data.models && data.models.length > 0) {
+          data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.innerText = `Giọng của tôi: ${m.name} (${m.size_mb} MB)`;
+            select.appendChild(opt);
+          });
+          select.value = data.models[0].id;
+        }
+      } catch (err) {
+        console.error("Lỗi tải models:", err);
+      }
+    }
+
+    async function loadHistory() {
+      try {
+        const res = await fetch('/api/history');
+        const list = await res.json();
+        const container = document.getElementById('historyList');
+        if (!list || list.length === 0) {
+          container.innerHTML = '<p class="text-slate-500 text-center py-4 text-[11px]">Chưa có lịch sử.</p>';
+          return;
+        }
+        container.innerHTML = list.map(item => `
+          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 transition">
+            <div class="truncate mr-2">
+              <p class="font-medium text-slate-300 truncate text-[11px]">${item.filename}</p>
+              <span class="text-[10px] text-slate-500">${item.time} • ${item.size_kb} KB</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="playAudio('${item.url}')" class="w-6 h-6 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white flex items-center justify-center transition">
+                <i class="fa-solid fa-play text-[10px]"></i>
+              </button>
+              <a href="${item.url}" download="${item.filename}" class="w-6 h-6 rounded bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition">
+                <i class="fa-solid fa-download text-[10px]"></i>
+              </a>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error("Lỗi tải lịch sử:", err);
+      }
+    }
+
+    function playAudio(url) {
+      const player = document.getElementById('audioPlayer');
+      player.src = url;
+      player.play();
+      document.getElementById('playerEmpty').classList.add('hidden');
+      document.getElementById('playerContent').classList.remove('hidden');
+      document.getElementById('downloadBtn').href = url;
+    }
+
+    async function generateAudio() {
+      const text = document.getElementById('inputText').value.trim();
+      if (!text) {
+        alert("Vui lòng nhập văn bản cần đọc!");
+        return;
+      }
+
+      const btn = document.getElementById('btnGenerate');
+      const voice = document.getElementById('baseVoice').value;
+      const userModel = document.getElementById('userModel').value;
+      const rateVal = document.getElementById('speechRate').value;
+      const rate = (rateVal >= 0 ? `+${rateVal}%` : `${rateVal}%`);
+      const pauseStyle = document.getElementById('pauseStyle').value;
+
+      btn.disabled = true;
+      btn.innerHTML = `
+        <i class="fa-solid fa-spinner fa-spin text-amber-300"></i>
+        <span>Đang tổng hợp giọng nói... Xin chờ vài giây</span>
+      `;
+
+      try {
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: text,
+            voice: voice,
+            rate: rate,
+            pitch: "+0Hz",
+            pause_style: pauseStyle,
+            user_model_id: userModel !== "none" ? userModel : null
+          })
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || "Lỗi tạo âm thanh");
+        }
+
+        const data = await response.json();
+        
+        // Hiển thị kết quả trong player
+        document.getElementById('playerEmpty').classList.add('hidden');
+        document.getElementById('playerContent').classList.remove('hidden');
+        
+        const audioPlayer = document.getElementById('audioPlayer');
+        audioPlayer.src = data.audio_url;
+        audioPlayer.play();
+
+        document.getElementById('resVoiceName').innerText = (userModel !== "none" ? `Giọng cá nhân (${data.stats.user_model})` : data.stats.voice);
+        document.getElementById('resWordCount').innerText = `${data.stats.word_count} từ (${data.stats.char_count} ký tự)`;
+        document.getElementById('downloadBtn').href = data.audio_url;
+        document.getElementById('downloadBtn').download = data.file_name;
+
+        loadHistory();
+      } catch (err) {
+        alert("Đã xảy ra lỗi: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-300 group-hover:rotate-12 transition transform"></i>
+          <span>TẠO GIỌNG NÓI NGAY (Ctrl + Enter)</span>
+        `;
+      }
+    }
+
+    let selectedClipFile = null;
+
+    function handleClipSelect(file) {
+      if (!file) return;
+      selectedClipFile = file;
+      const label = document.getElementById('clipFileLabel');
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      label.innerHTML = `<strong>${file.name}</strong> (${sizeMB} MB)`;
+
+      // Tự động gợi ý tên giọng nếu chưa nhập
+      const nameInput = document.getElementById('clipVoiceName');
+      if (!nameInput.value.trim()) {
+        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        nameInput.value = baseName;
+      }
+
+      document.getElementById('btnExtractClip').disabled = false;
+      document.getElementById('clipDropArea').classList.add('border-blue-500', 'bg-blue-950/20');
+    }
+
+    async function submitExtractClip() {
+      if (!selectedClipFile) {
+        alert("Vui lòng chọn file clip video hoặc audio!");
+        return;
+      }
+
+      const btn = document.getElementById('btnExtractClip');
+      const status = document.getElementById('clipExtractStatus');
+      const resultBox = document.getElementById('clipExtractResult');
+      const voiceName = document.getElementById('clipVoiceName').value.trim();
+
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang tách âm & xử lý lọc tạp âm...`;
+
+      status.classList.remove('hidden');
+      status.className = "mt-3 text-xs text-blue-400";
+      status.innerText = "Đang tải lên clip và trích xuất giọng bằng AI FFmpeg...";
+      resultBox.classList.add('hidden');
+
+      const formData = new FormData();
+      formData.append("file", selectedClipFile);
+      formData.append("voice_name", voiceName);
+
+      try {
+        const res = await fetch('/api/extract-clip-voice', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || "Không thể trích xuất âm thanh từ clip");
+        }
+
+        status.className = "mt-3 text-xs text-emerald-400 font-medium";
+        status.innerText = `✓ ${data.message}`;
+
+        // Hiển thị kết quả nghe thử
+        resultBox.classList.remove('hidden');
+        document.getElementById('clipVoiceSize').innerText = `${data.voice.size_kb} KB`;
+        const previewAudio = document.getElementById('clipAudioPreview');
+        previewAudio.src = data.voice.url;
+        previewAudio.play();
+
+        // Cập nhật danh sách model và tự động chọn model mới
+        await refreshModels();
+        const userModelSelect = document.getElementById('userModel');
+        userModelSelect.value = data.voice.id;
+
+      } catch (err) {
+        status.className = "mt-3 text-xs text-rose-400";
+        status.innerText = `✕ Lỗi: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-scissors"></i> <span>TÁCH VÀ LẤY GIỌNG TỪ CLIP NÀY</span>`;
+      }
+    }
+
+    async function uploadModelFile(file) {
+      if (!file) return;
+      const status = document.getElementById('uploadStatus');
+      status.classList.remove('hidden');
+      status.className = "mt-3 text-xs text-blue-400";
+      status.innerText = `Đang tải lên model ${file.name}...`;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const res = await fetch('/api/upload-model', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (res.ok) {
+          status.className = "mt-3 text-xs text-emerald-400 font-medium";
+          status.innerText = `✓ ${data.message}`;
+          refreshModels();
+        } else {
+          status.className = "mt-3 text-xs text-rose-400";
+          status.innerText = `✕ Lỗi: ${data.detail || "Không thể nạp file"}`;
+        }
+      } catch (err) {
+        status.className = "mt-3 text-xs text-rose-400";
+        status.innerText = `✕ Lỗi mạng khi tải lên`;
+      }
+    }
+
+    // Tự động tải dữ liệu ban đầu
+    refreshModels();
+    loadHistory();
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Output files & Uploads
+outputs/*.mp3
+outputs/*.wav
+uploads/temp_*
+models/extracted_voices/*.wav
+!models/extracted_voices/.gitkeep
+!models/.gitkeep
+
+# Environment
+.env
+venv/
+env/
+.venv/
