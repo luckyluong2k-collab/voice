@@ -190,7 +190,11 @@ class VoiceManager:
                 "gender": gender,
                 "base_voice": base_voice,
                 "pitch_ratio": pitch_ratio,
-                "eq_filters": eq_filters
+                "eq_filters": eq_filters,
+                # Lưu phổ trung bình của chính file mẫu để hiệu chỉnh theo
+                # giọng nền thực tế, thay vì so với một phổ nam/nữ chung.
+                "spectrum_bands": [[fc, fl, fh] for fc, fl, fh in bands],
+                "spectral_profile": [round(value, 8) for value in u_spec]
             }
         except Exception as e:
             print(f"[Lỗi trích xuất profile âm học] {e}")
@@ -256,7 +260,7 @@ class VoiceManager:
 
             # Tự động phân tích profile âm học nếu chưa lưu
             profile = voice_meta.get("profile")
-            if not profile or "f0" not in profile:
+            if not profile or "f0" not in profile or "spectral_profile" not in profile:
                 profile = self.extract_acoustic_profile(str(wav))
                 voice_meta["profile"] = profile
                 voice_meta["custom_name"] = display_name
@@ -433,6 +437,32 @@ class VoiceManager:
                 "equalizer=f=3500:t=q:w=1.2:g=-2.5"
             ]
 
+        # Hiệu chỉnh phổ động: so sánh file TTS nền vừa tạo với phổ trung
+        # bình của file người dùng. Cách này bám vào đúng giọng nền đang dùng
+        # và tránh phụ thuộc hoàn toàn vào các mức EQ mặc định.
+        target_spectrum = profile.get("spectral_profile")
+        spectrum_bands = profile.get("spectrum_bands")
+        if target_spectrum and spectrum_bands:
+            try:
+                source_profile = self.extract_acoustic_profile(input_wav)
+                source_spectrum = source_profile.get("spectral_profile")
+                if source_spectrum and len(source_spectrum) == len(target_spectrum):
+                    calibrated_eq = []
+                    for band, target_value, source_value in zip(
+                        spectrum_bands, target_spectrum, source_spectrum
+                    ):
+                        if target_value > 0 and source_value > 0:
+                            gain = 10 * math.log10(target_value / source_value)
+                            gain = max(-6.0, min(6.0, gain))
+                            if abs(gain) >= 0.8:
+                                calibrated_eq.append(
+                                    f"equalizer=f={band[0]}:t=q:w=1.4:g={gain:.1f}"
+                                )
+                    if calibrated_eq:
+                        eq_filters = calibrated_eq
+            except Exception as exc:
+                print(f"[Voice Conversion] Bỏ qua hiệu chỉnh phổ động: {exc}")
+
         af_list = [
             f"rubberband=pitch={total_pitch_scale:.4f}:formant=shifted:pitchq=quality"
         ]
@@ -451,6 +481,38 @@ class VoiceManager:
 
         if res.returncode == 0 and Path(output_wav).exists() and Path(output_wav).stat().st_size > 1000:
             print(f"[Voice Conversion] Chuyển đổi thành công: {output_wav}")
+            # Hiệu chỉnh lần cuối theo F0 thực đo của file đầu ra. F0 của
+            # Edge-TTS thay đổi theo câu, nên dùng một base_f0 cố định dễ bị
+            # lệch vài phần trăm so với giọng mẫu người dùng.
+            target_f0 = float(profile.get("f0") or 0)
+            if target_f0 > 70:
+                try:
+                    measured = self.extract_acoustic_profile(str(output_wav)).get("f0")
+                    measured_f0 = float(measured or 0)
+                    correction = target_f0 / measured_f0 if measured_f0 > 70 else 1.0
+                    if 0.96 > correction or correction > 1.04:
+                        correction = max(0.85, min(1.18, correction))
+                        corrected_path = Path(output_wav).with_name(
+                            f"{Path(output_wav).stem}_pitchfix{Path(output_wav).suffix}"
+                        )
+                        fix_cmd = [
+                            ffmpeg_exe, "-y",
+                            "-i", str(output_wav),
+                            "-af", f"rubberband=pitch={correction:.4f}:tempo=1:formant=preserved:pitchq=quality",
+                            str(corrected_path)
+                        ]
+                        fix_res = subprocess.run(
+                            fix_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                        )
+                        if fix_res.returncode == 0 and corrected_path.exists() and corrected_path.stat().st_size > 1000:
+                            corrected_path.replace(output_wav)
+                            print(
+                                f"[Voice Conversion] Hiệu chỉnh F0 {measured_f0:.1f}Hz -> "
+                                f"{target_f0:.1f}Hz (x{correction:.4f})"
+                            )
+                except Exception as exc:
+                    # Không làm hỏng file đã chuyển đổi chỉ vì bước tinh chỉnh.
+                    print(f"[Voice Conversion] Bỏ qua hiệu chỉnh F0: {exc}")
             return True
 
         print(f"[Voice Conversion] Rubberband thất bại ({res.stderr[:200]}), đang kích hoạt bộ lọc thay thế asetrate/atempo...")
