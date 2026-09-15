@@ -1336,7 +1336,11 @@ Ví dụ: Kính chào quý vị, [lấy hơi] hôm nay thời tiết rất đẹ
       if (btn) btn.disabled = true;
 
       try {
-        const res = await fetch('/api/check-update');
+        const res = await fetch(`${API_BASE}/api/check-update`);
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('application/json')) {
+          throw new Error('Máy chủ không trả về dữ liệu JSON. Hãy kiểm tra backend TTS đang chạy.');
+        }
         const data = await res.json();
         
         const box = document.getElementById('versionStatusBox');
