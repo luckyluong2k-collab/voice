@@ -27,6 +27,7 @@ import edge_tts
 from voice_converter import VoiceManager
 from text_normalizer import normalize_vietnamese_text
 from subtitle_generator import SubtitleGenerator
+from audio_processor import AudioProcessor
 
 BASE_DIR = Path(__file__).resolve().parent
 MODELS_DIR = BASE_DIR / "models"
@@ -39,6 +40,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 voice_manager = VoiceManager(str(MODELS_DIR))
+audio_processor = AudioProcessor()
 
 app = FastAPI(title="Viet Voice Studio - Clone & TTS Tiếng Việt", version="2.0.0")
 
@@ -55,11 +57,23 @@ class TTSRequest(BaseModel):
     voice: str = "vi-VN-NamMinhNeural"
     rate: str = "+0%"
     pitch: str = "+0Hz"
+    pitch_percent: int = 0
+    voice_style: str = "story"
+    breath_mode: str = "natural"
     pause_style: str = "natural"
     user_model_id: Optional[str] = None
     auto_normalize: bool = True
 
+
 def format_natural_text(text: str, pause_style: str) -> str:
+    # 1. Hỗ trợ thẻ lấy hơi [lấy hơi], [hơi thở], [thở], [breath]
+    text = re.sub(
+        r"[.,;:?!]*\s*\[(?:lấy hơi|lay hoi|hơi thở|hoi tho|thở|tho|breath)\]\s*[.,;:?!]*",
+        "... ",
+        text,
+        flags=re.IGNORECASE
+    )
+
     def replace_break_tag(match):
         val_str = match.group(1).replace(",", ".")
         try:
@@ -143,6 +157,7 @@ async def generate_speech(req: TTSRequest):
     
     file_id = f"voice_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     base_output_path = OUTPUTS_DIR / f"{file_id}_base.mp3"
+    converted_output_path = OUTPUTS_DIR / f"{file_id}_conv.mp3"
     final_output_path = OUTPUTS_DIR / f"{file_id}.mp3"
     srt_output_path = OUTPUTS_DIR / f"{file_id}.srt"
 
@@ -157,7 +172,7 @@ async def generate_speech(req: TTSRequest):
                 text=clean_text, 
                 voice=req.voice, 
                 rate=req.rate, 
-                pitch=req.pitch,
+                pitch="+0Hz",
                 boundary="SentenceBoundary"
             )
             
@@ -182,16 +197,30 @@ async def generate_speech(req: TTSRequest):
         raise HTTPException(status_code=500, detail=f"Lỗi khi tổng hợp giọng nói: {str(last_error)}")
 
     # 4. Áp dụng model giọng cá nhân nếu có
+    working_audio = base_output_path
     if req.user_model_id and req.user_model_id != "none":
         success = voice_manager.apply_voice_conversion(
             input_wav=str(base_output_path),
-            output_wav=str(final_output_path),
+            output_wav=str(converted_output_path),
             model_id=req.user_model_id
         )
-        if not success:
-            final_output_path = base_output_path
-    else:
-        final_output_path = base_output_path
+        if success and converted_output_path.exists():
+            working_audio = converted_output_path
+
+    # 5. Nâng cấp giọng điệu, nhịp lấy hơi như người thật & tông cao thấp
+    try:
+        proc_ok = audio_processor.process_voice(
+            input_audio=str(working_audio),
+            output_audio=str(final_output_path),
+            pitch_percent=req.pitch_percent,
+            voice_style=req.voice_style,
+            breath_mode=req.breath_mode
+        )
+        if not proc_ok or not final_output_path.exists():
+            final_output_path = working_audio
+    except Exception as e:
+        print(f"[Lỗi xử lý AudioProcessor] {e}")
+        final_output_path = working_audio
 
     word_count = len(raw_text.split())
     char_count = len(raw_text)
@@ -205,6 +234,14 @@ async def generate_speech(req: TTSRequest):
                 user_voice_name = m["name"]
                 break
 
+    style_names = {
+        "story": "Kể chuyện / Truyền cảm",
+        "news": "Tin tức / Thuyết minh",
+        "tiktok": "Sôi nổi / Review TikTok",
+        "podcast": "Tâm sự / Podcast ban đêm",
+        "natural": "Tự nhiên tiêu chuẩn"
+    }
+
     return {
         "status": "success",
         "file_name": final_output_path.name,
@@ -214,7 +251,10 @@ async def generate_speech(req: TTSRequest):
             "word_count": word_count,
             "char_count": char_count,
             "voice": req.voice,
-            "user_model": user_voice_name
+            "user_model": user_voice_name,
+            "voice_style": style_names.get(req.voice_style, req.voice_style),
+            "pitch_percent": req.pitch_percent,
+            "breath_mode": req.breath_mode
         }
     }
 

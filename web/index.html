@@ -109,10 +109,12 @@
 
         <!-- Thanh công cụ nhanh -->
         <div class="flex flex-wrap items-center gap-1.5 mb-3 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-xs">
-          <span class="text-slate-400 mr-1 font-medium"><i class="fa-solid fa-pause text-indigo-400"></i> Ngắt nghỉ:</span>
+          <span class="text-slate-400 mr-1 font-medium"><i class="fa-solid fa-pause text-indigo-400"></i> Ngắt nghỉ & Thở:</span>
           <button onclick="insertPause('0.3s')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition border border-slate-700/50">+ 0.3s</button>
           <button onclick="insertPause('0.5s')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition border border-slate-700/50">+ 0.5s</button>
-          <button onclick="insertPause('1.0s')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition border border-slate-700/50">+ 1s</button>
+          <button onclick="insertBreath()" class="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 rounded-md transition flex items-center gap-1 font-medium">
+            <i class="fa-solid fa-wind text-[10px]"></i> + Lấy hơi
+          </button>
 
           <div class="ml-auto flex items-center gap-2">
             <!-- Nút tự động sửa viết tắt -->
@@ -132,8 +134,8 @@
           id="inputText"
           rows="9"
           placeholder="Dán hoặc gõ văn bản tiếng Việt của bạn vào đây...
-Hệ thống sẽ tự động ngắt nghỉ câu tự nhiên theo dấu chấm, phẩy, hoặc bạn có thể chèn [+ 0.5s] để dừng đúng ý muốn.
-Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5s] chúc quý vị một ngày tốt lành!"
+Hệ thống sẽ tự động lấy hơi, ngắt nghỉ câu tự nhiên theo dấu chấm, phẩy, hoặc bạn có thể bấm [+ Lấy hơi] hay [+ 0.5s] để dừng đúng ý muốn.
+Ví dụ: Kính chào quý vị, [lấy hơi] hôm nay thời tiết rất đẹp [nghỉ 0.5s] chúc quý vị một ngày tốt lành!"
           class="w-full bg-slate-950/90 text-slate-200 p-4 rounded-xl border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-y text-sm leading-relaxed custom-scrollbar transition placeholder:text-slate-600"
           oninput="updateCounts()"
         ></textarea>
@@ -146,14 +148,15 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
           </label>
         </div>
 
-        <!-- Bảng điều khiển giọng đọc & tốc độ -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-800">
-          <!-- Chọn giọng đọc (Gộp trực tiếp cả Giọng tách và Giọng mẫu) -->
+        <!-- Bảng điều khiển giọng đọc, giọng điệu, tông & nhịp lấy hơi -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-4 pt-4 border-t border-slate-800">
+          
+          <!-- 1. Chọn giọng đọc (Gộp trực tiếp cả Giọng tách và Giọng mẫu) -->
           <div class="sm:col-span-2">
             <label class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
               <span class="flex items-center gap-1.5">
                 <i class="fa-solid fa-circle-check text-emerald-400"></i> 
-                <span>Danh sách Giọng Đọc (Chọn giọng tại đây hoặc bấm trong Thư Viện bên phải)</span>
+                <span>Danh sách Giọng Đọc (Chọn tại đây hoặc bấm trong Thư Viện bên phải)</span>
               </span>
               <button onclick="refreshModels()" class="text-[11px] text-blue-400 hover:underline flex items-center gap-1">
                 <i class="fa-solid fa-rotate-right"></i> Cập nhật danh sách
@@ -170,7 +173,55 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
             </select>
           </div>
 
-          <!-- Tốc độ đọc -->
+          <!-- 2. Giọng điệu / Phong cách biểu cảm (MỚI) -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
+              <i class="fa-solid fa-masks-theater text-indigo-400 mr-1"></i> Giọng điệu & Biểu cảm
+            </label>
+            <select id="voiceStyle" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-indigo-500">
+              <option value="story" selected>📖 Kể chuyện / Truyền cảm (Âm vực ấm, giàu cảm xúc)</option>
+              <option value="news">📰 Tin tức / Thuyết minh (Dứt khoát, rõ ràng)</option>
+              <option value="tiktok">⚡ Sôi nổi / Review TikTok (Bắt tai, dồi dào năng lượng)</option>
+              <option value="podcast">🎙️ Tâm sự / Podcast ban đêm (Trầm ấm, gần gũi)</option>
+              <option value="natural">🤖 Tự nhiên tiêu chuẩn AI</option>
+            </select>
+          </div>
+
+          <!-- 3. Nhịp lấy hơi như người thật (MỚI) -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+              <span><i class="fa-solid fa-wind text-emerald-400 mr-1"></i> Nhịp lấy hơi (Hơi thở người)</span>
+              <span class="text-[10px] text-emerald-400 font-medium">Như người thật</span>
+            </label>
+            <select id="breathMode" class="w-full bg-slate-950 border border-emerald-500/40 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-emerald-500">
+              <option value="natural" selected>🌬️ Lấy hơi tự nhiên (Khuyên dùng - Hít thở nhẹ giữa câu)</option>
+              <option value="soft">💨 Lấy hơi khẽ (Thoáng qua tinh tế)</option>
+              <option value="deep">🧘 Lấy hơi sâu (Truyền cảm, kịch tính)</option>
+              <option value="off">🚫 Tắt lấy hơi</option>
+            </select>
+          </div>
+
+          <!-- 4. Tông cao thấp (Pitch Control) (MỚI) -->
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <label class="font-semibold text-slate-300">
+                <i class="fa-solid fa-sliders text-cyan-400 mr-1"></i> Tông cao / thấp (Cao độ)
+              </label>
+              <span id="pitchValue" class="text-cyan-400 font-mono font-medium">Chuẩn (0%)</span>
+            </div>
+            <input 
+              type="range" 
+              id="pitchRate" 
+              min="-20" 
+              max="20" 
+              value="0" 
+              step="2" 
+              oninput="updatePitchLabel(this.value)"
+              class="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+            >
+          </div>
+
+          <!-- 5. Tốc độ đọc -->
           <div>
             <div class="flex items-center justify-between text-xs mb-1.5">
               <label class="font-semibold text-slate-300">
@@ -184,22 +235,10 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
               min="-30" 
               max="50" 
               value="0" 
-              step="5"
+              step="5" 
               oninput="updateRateLabel(this.value)"
               class="w-full accent-blue-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
             >
-          </div>
-
-          <!-- Kiểu ngắt nghỉ -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5">
-              <i class="fa-solid fa-lungs text-emerald-400 mr-1"></i> Ngắt nghỉ hơi thở
-            </label>
-            <select id="pauseStyle" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 outline-none focus:border-emerald-500">
-              <option value="natural">Tự nhiên (Nghỉ 250ms dấu phẩy, 500ms dấu chấm)</option>
-              <option value="long">Chậm rãi / Kể chuyện (Nghỉ dài hơn, truyền cảm)</option>
-              <option value="standard">Tiêu chuẩn AI</option>
-            </select>
           </div>
         </div>
 
@@ -549,6 +588,17 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
       updateCounts();
     }
 
+    function insertBreath() {
+      const textarea = document.getElementById('inputText');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const tag = " [lấy hơi] ";
+      textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+      updateCounts();
+    }
+
     function loadSampleText(type) {
       document.getElementById('inputText').value = sampleTexts[type] || "";
       updateCounts();
@@ -557,6 +607,18 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
     function clearText() {
       document.getElementById('inputText').value = "";
       updateCounts();
+    }
+
+    function updatePitchLabel(val) {
+      val = parseInt(val);
+      const label = document.getElementById('pitchValue');
+      if (val === 0) {
+        label.innerText = "Chuẩn (0%)";
+      } else if (val > 0) {
+        label.innerText = `Cao sáng (+${val}%)`;
+      } else {
+        label.innerText = `Trầm ấm (${val}%)`;
+      }
     }
 
     function updateRateLabel(val) {
@@ -933,7 +995,9 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
       const userModelId = (currentVoiceState.type === 'custom' ? currentVoiceState.id : null);
       const rateVal = document.getElementById('speechRate').value;
       const rate = (rateVal >= 0 ? `+${rateVal}%` : `${rateVal}%`);
-      const pauseStyle = document.getElementById('pauseStyle').value;
+      const pitchPercent = parseInt(document.getElementById('pitchRate').value || 0);
+      const voiceStyle = document.getElementById('voiceStyle').value || "story";
+      const breathMode = document.getElementById('breathMode').value || "natural";
       const autoNorm = document.getElementById('chkAutoNormalize').checked;
 
       btn.disabled = true;
@@ -951,7 +1015,10 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
             voice: baseVoice,
             rate: rate,
             pitch: "+0Hz",
-            pause_style: pauseStyle,
+            pitch_percent: pitchPercent,
+            voice_style: voiceStyle,
+            breath_mode: breathMode,
+            pause_style: "natural",
             user_model_id: userModelId,
             auto_normalize: autoNorm
           })
@@ -971,7 +1038,15 @@ Ví dụ: Kính chào quý vị, hôm nay thời tiết rất đẹp [nghỉ 0.5
         audioPlayer.src = `${API_BASE}${data.audio_url}`;
         audioPlayer.play();
 
-        document.getElementById('resVoiceName').innerText = (userModelId ? `Giọng riêng: ${data.stats.user_model}` : data.stats.voice);
+        const vName = (userModelId ? `Giọng riêng: ${data.stats.user_model}` : data.stats.voice);
+        const pitchText = (pitchPercent === 0 ? 'Tông chuẩn' : (pitchPercent > 0 ? `Tông cao +${pitchPercent}%` : `Tông trầm ${pitchPercent}%`));
+        document.getElementById('resVoiceName').innerHTML = `
+          <span class="text-emerald-400 font-bold">${vName}</span>
+          <span class="text-slate-500 mx-1">•</span>
+          <span class="text-indigo-300">${data.stats.voice_style}</span>
+          <span class="text-slate-500 mx-1">•</span>
+          <span class="text-cyan-300">${pitchText}</span>
+        `;
         document.getElementById('resWordCount').innerText = `${data.stats.word_count} từ (${data.stats.char_count} ký tự)`;
         document.getElementById('downloadBtn').href = `${API_BASE}${data.audio_url}`;
         document.getElementById('downloadBtn').download = data.file_name;
